@@ -1,5 +1,5 @@
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -173,7 +173,7 @@ fn create_or_update_file(path: &Path, cli: &Cli) -> Result<()> {
         .context("Failed to create or open file")?;
 
     if let Some(template) = &cli.template {
-        let mut content = fs::read_to_string(template).context("Failed to read template file")?;
+        let content = fs::read_to_string(template).context("Failed to read template file")?;
         file.write_all(content.as_bytes())
             .context("Failed to write template content to file")?;
         if cli.verbose {
@@ -234,14 +234,15 @@ fn set_timestamp(path: &Path, time_str: &str, verbose: bool) -> Result<()> {
 fn parse_timestamp(time_str: &str) -> Result<SystemTime> {
     let dt = NaiveDateTime::parse_from_str(time_str, "%Y-%m-%d %H:%M:%S")
         .context("Invalid timestamp format")?;
-    let timestamp = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(dt.timestamp() as u64);
+    let timestamp =
+        SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(dt.and_utc().timestamp() as u64);
     Ok(timestamp)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Seek;
+    use std::fs::File;
     use tempfile::{tempdir, NamedTempFile};
 
     #[test]
