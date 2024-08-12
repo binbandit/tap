@@ -57,9 +57,8 @@ jobs:
           override: true
       - name: Semantic Release
         id: semantic
-        uses: cycjimmy/semantic-release-action@v3
+        uses: cycjimmy/semantic-release-action@v4
         with:
-          semantic_version: 18
           extra_plugins: |
             @semantic-release/git
             @semantic-release/changelog
@@ -103,7 +102,7 @@ jobs:
       - name: Update Homebrew formula
         if: steps.semantic.outputs.new_release_published == 'true'
         env:
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
