@@ -1,5 +1,5 @@
 use std::fs::{self, File, OpenOptions};
-use std::io::{Write, Read};
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -147,7 +147,11 @@ fn create_directory(path: &Path, verbose: bool) -> Result<()> {
 fn create_or_update_file(path: &Path, cli: &Cli) -> Result<()> {
     if cli.trim {
         let content = fs::read_to_string(path).context("Failed to read file content")?;
-        let trimmed_content = content.lines().map(|line| line.trim_end()).collect::<Vec<_>>().join("\n");
+        let trimmed_content = content
+            .lines()
+            .map(|line| line.trim_end())
+            .collect::<Vec<_>>()
+            .join("\n");
         fs::write(path, trimmed_content).context("Failed to write trimmed content to file")?;
         if cli.verbose {
             println!("Trailing whitespace removed from: {}", path.display());
@@ -169,12 +173,14 @@ fn create_or_update_file(path: &Path, cli: &Cli) -> Result<()> {
         .context("Failed to create or open file")?;
 
     if let Some(template) = &cli.template {
-        let mut content = fs::read_to_string(template)
-            .context("Failed to read template file")?;
+        let mut content = fs::read_to_string(template).context("Failed to read template file")?;
         file.write_all(content.as_bytes())
             .context("Failed to write template content to file")?;
         if cli.verbose {
-            println!("File created/updated with template content: {}", path.display());
+            println!(
+                "File created/updated with template content: {}",
+                path.display()
+            );
         }
     } else if let Some(content) = &cli.write {
         file.write_all(content.as_bytes())
@@ -235,8 +241,8 @@ fn parse_timestamp(time_str: &str) -> Result<SystemTime> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{tempdir, NamedTempFile};
     use std::io::Seek;
+    use tempfile::{tempdir, NamedTempFile};
 
     #[test]
     fn test_expand_paths() -> Result<()> {
