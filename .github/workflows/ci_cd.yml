@@ -1,0 +1,133 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+          components: rustfmt, clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
+
+  release:
+    name: Release
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v3
+        with:
+          semantic_version: 18
+          extra_plugins: |
+            @semantic-release/git
+            @semantic-release/changelog
+            @semantic-release/exec
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Cargo.toml
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ steps.semantic.outputs.new_release_version }}"/' Cargo.toml
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git commit -am "chore: update version in Cargo.toml to ${{ steps.semantic.outputs.new_release_version }}"
+          git push
+
+      - name: Build for multiple platforms
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          rustup target add x86_64-unknown-linux-gnu
+          rustup target add x86_64-apple-darwin
+          rustup target add x86_64-pc-windows-msvc
+          cargo build --release --target x86_64-unknown-linux-gnu
+          cargo build --release --target x86_64-apple-darwin
+          cargo build --release --target x86_64-pc-windows-msvc
+
+      - name: Upload artifacts
+        if: steps.semantic.outputs.new_release_published == 'true'
+        uses: actions/upload-artifact@v2
+        with:
+          name: binaries
+          path: |
+            target/x86_64-unknown-linux-gnu/release/tap
+            target/x86_64-apple-darwin/release/tap
+            target/x86_64-pc-windows-msvc/release/tap.exe
+
+      - name: Publish to crates.io
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: cargo publish --token ${{ secrets.CRATES_IO_TOKEN }}
+
+      - name: Update Homebrew formula
+        if: steps.semantic.outputs.new_release_published == 'true'
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          git clone https://github.com/crazywolf132/homebrew-tap.git
+          cd homebrew-tap
+          cat << EOF > Formula/tap.rb
+          class Tap < Formula
+            desc "A next-gen version of touch with extended capabilities"
+            homepage "https://github.com/crazywolf132/tap"
+            url "https://github.com/crazywolf132/tap/archive/v${{ steps.semantic.outputs.new_release_version }}.tar.gz"
+            sha256 "$(curl -sL https://github.com/crazywolf132/tap/archive/v${{ steps.semantic.outputs.new_release_version }}.tar.gz | sha256sum | awk '{print $1}')"
+            version "${{ steps.semantic.outputs.new_release_version }}"
+
+            depends_on "rust" => :build
+
+            def install
+              system "cargo", "install", "--root", prefix, "--path", "."
+            end
+
+            test do
+              system "#{bin}/tap", "--version"
+            end
+          end
+          EOF
+          git add Formula/tap.rb
+          git commit -m "Update tap to ${{ steps.semantic.outputs.new_release_version }}"
+          git push https://${HOMEBREW_TAP_GITHUB_TOKEN}@github.com/crazywolf132/homebrew-tap.git main
