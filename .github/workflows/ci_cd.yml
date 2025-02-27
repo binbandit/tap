@@ -50,11 +50,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           override: true
+      
       - name: Semantic Release
         id: semantic
         uses: cycjimmy/semantic-release-action@v4
@@ -75,25 +77,97 @@ jobs:
           git commit -am "chore: update version in Cargo.toml to ${{ steps.semantic.outputs.new_release_version }}"
           git push
 
-      - name: Build for multiple platforms
+      - name: Install cross-compilation tools
         if: steps.semantic.outputs.new_release_published == 'true'
         run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
           rustup target add x86_64-unknown-linux-gnu
+          rustup target add x86_64-unknown-linux-musl
+          rustup target add aarch64-unknown-linux-gnu
+          rustup target add aarch64-unknown-linux-musl
           rustup target add x86_64-apple-darwin
+          rustup target add aarch64-apple-darwin
           rustup target add x86_64-pc-windows-msvc
+          rustup target add x86_64-pc-windows-gnu
+
+      - name: Build for Linux (GNU)
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
           cargo build --release --target x86_64-unknown-linux-gnu
+          cargo build --release --target aarch64-unknown-linux-gnu
+
+      - name: Build for Linux (MUSL)
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          cargo build --release --target x86_64-unknown-linux-musl
+          cargo build --release --target aarch64-unknown-linux-musl
+
+      - name: Build for macOS
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
           cargo build --release --target x86_64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin
+
+      - name: Build for Windows
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
           cargo build --release --target x86_64-pc-windows-msvc
+          cargo build --release --target x86_64-pc-windows-gnu
+
+      - name: Create distribution packages
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          mkdir -p dist/
+          # Create DEB package
+          cargo install cargo-deb
+          cargo deb --target x86_64-unknown-linux-gnu
+          cargo deb --target aarch64-unknown-linux-gnu
+          mv target/debian/*.deb dist/
+          
+          # Create RPM package
+          cargo install cargo-generate-rpm
+          cargo generate-rpm --target x86_64-unknown-linux-gnu
+          cargo generate-rpm --target aarch64-unknown-linux-gnu
+          mv target/generate-rpm/*.rpm dist/
+          
+          # Create archives
+          cd target
+          for target in x86_64-unknown-linux-* aarch64-unknown-linux-* *-apple-darwin *-windows-*; do
+            if [ -d "$target/release" ]; then
+              cd $target/release
+              if [[ $target == *"windows"* ]]; then
+                zip -r ../../../dist/tap-${{ steps.semantic.outputs.new_release_version }}-$target.zip tap.exe
+              else
+                tar czf ../../../dist/tap-${{ steps.semantic.outputs.new_release_version }}-$target.tar.gz tap
+              fi
+              cd ../..
+            fi
+          done
+          cd ..
+
+      - name: Generate checksums
+        if: steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cd ..
 
       - name: Upload artifacts
         if: steps.semantic.outputs.new_release_published == 'true'
         uses: actions/upload-artifact@v2
         with:
-          name: binaries
-          path: |
-            target/x86_64-unknown-linux-gnu/release/tap
-            target/x86_64-apple-darwin/release/tap
-            target/x86_64-pc-windows-msvc/release/tap.exe
+          name: packages
+          path: dist/*
+
+      - name: Upload to release
+        if: steps.semantic.outputs.new_release_published == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          tag_name: v${{ steps.semantic.outputs.new_release_version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish to crates.io
         if: steps.semantic.outputs.new_release_published == 'true'

@@ -1,7 +1,7 @@
 # tap 🖱️
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Rust](https://img.shields.io/badge/rust-1.80%2B-blue.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.77%2B-blue.svg)](https://www.rust-lang.org)
 
 `tap` is a next-generation replacement for the Unix `touch` command, offering enhanced capabilities and intuitive options for file and directory manipulation.
 
@@ -15,6 +15,11 @@
 - Check for file/directory existence without modification
 - Support for glob patterns
 - Set custom timestamps for files
+- Convert line endings (CRLF ↔ LF)
+- Force creation of parent directories
+- Transform file encodings (with automatic detection)
+- Structured output formats (JSON, YAML)
+- Cross-platform compatibility
 
 ## 🚀 Installation
 
@@ -76,6 +81,22 @@ tap -t "2023-05-01 12:00:00" file.txt
 
 # Use glob patterns
 tap src/**/*.rs
+
+# Force creation of parent directories
+tap --force deeply/nested/new/file.txt
+
+# Convert line endings
+tap --line_endings crlf2lf windows_file.txt
+tap --line_endings lf2crlf unix_file.txt
+
+# Get JSON output
+tap --output-format json *.txt
+
+# Get YAML output
+tap --output-format yaml config/
+
+# Convert file encodings with automatic detection
+tap --encoding utf8 mixed_encoding_files/*.txt
 ```
 
 ## 🔧 Options
@@ -90,6 +111,23 @@ tap src/**/*.rs
 - `--template <FILE>`: Use a template file for content
 - `--trim`: Remove trailing whitespace from each line
 - `--check`: Check if the file or directory exists (dry run)
+- `-f, --force`: Force creation of parent directories without confirmation
+- `--line_endings <CONVERSION>`: Convert line endings (values: crlf2lf, lf2crlf)
+- `--encoding <ENCODING>`: Convert file encoding (values: utf8, latin1, windows-1252)
+- `--timestamp_format <FORMAT>`: Custom timestamp format (e.g., "%Y/%m/%d %H:%M")
+- `--output-format <FORMAT>`: Output format (values: text, json, yaml)
+
+## 🏗️ Architecture
+
+The `tap` application is organized into modules for better maintainability:
+
+- `cli`: Command-line interface definition
+- `file_ops`: File and directory operations
+- `permissions`: Permission handling
+- `timestamp`: Timestamp parsing and modification
+- `output`: Output formatting and result handling
+- `glob_utils`: Path expansion utilities
+- `main`: Main program logic and orchestration
 
 ## 🤝 Contributing
 
