@@ -1,6 +1,6 @@
 [package]
 name = "tap"
-version = "0.0.1"
+version = "1.0.0"
 edition = "2021"
 authors = ["Brayden Moon <crazywolf132@gmail.com>"]
 description = "A next-gen version of touch with extended capabilities"
