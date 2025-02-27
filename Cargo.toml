@@ -7,12 +7,43 @@ description = "A next-gen version of touch with extended capabilities"
 
 [dependencies]
 anyhow = "1.0.86"
+chardet = "0.2.4"
 chrono = "0.4.38"
 clap = { version = "4.5.15", features = ["derive"] }
+encoding_rs = "0.8.33"
 filetime = "0.2.24"
 glob = "0.3.1"
 tempfile = "3.12.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
 
 [[bin]]
 name = "tap"
 path = "src/main.rs"
+
+[package.metadata.deb]
+maintainer = "Brayden Moon <crazywolf132@gmail.com>"
+copyright = "2024, Brayden Moon <crazywolf132@gmail.com>"
+license-file = ["LICENSE", "4"]
+extended-description = """
+A next-generation replacement for the Unix touch command, offering enhanced capabilities 
+and intuitive options for file and directory manipulation."""
+depends = "$auto"
+section = "utility"
+priority = "optional"
+assets = [
+    ["target/release/tap", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/tap/README.md", "644"],
+    ["LICENSE", "usr/share/doc/tap/LICENSE", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "tap"
+license = "MIT"
+release = "1"
+epoch = "0"
+summary = "A next-gen version of touch with extended capabilities"
+description = """
+A next-generation replacement for the Unix touch command, offering enhanced capabilities 
+and intuitive options for file and directory manipulation."""
