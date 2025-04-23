@@ -7,6 +7,7 @@ description = "A next-gen version of touch with extended capabilities"
 
 [dependencies]
 anyhow = "1.0.86"
+atty = "0.2"
 chardet = "0.2.4"
 chrono = "0.4.38"
 clap = { version = "4.5.15", features = ["derive"] }

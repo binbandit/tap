@@ -84,6 +84,31 @@ fn run(cli: &Cli) -> Result<()> {
             }
         }
 
+        // Safety: Never overwrite a file with a directory or vice versa
+        if path.exists() {
+            if is_dir_path && path.is_file() {
+                result.operation = "error".to_string();
+                result.error = Some(format!("Cannot create directory '{}': a file already exists at this path.", path.display()));
+                results.push(result);
+                continue;
+            } else if !is_dir_path && path.is_dir() {
+                result.operation = "error".to_string();
+                result.error = Some(format!("Cannot create file '{}': a directory already exists at this path.", path.display()));
+                results.push(result);
+                continue;
+            }
+        }
+
+        // Warn if encoding or line-ending flags are used on a directory
+        if is_dir_path && (cli.encoding.is_some() || cli.line_endings.is_some()) {
+            if cli.verbose || atty::is(atty::Stream::Stdout) {
+                eprintln!("Warning: --encoding and --line-endings have no effect on directories. Skipping.");
+            }
+        }
+
+        // Friendly feedback on success if interactive or --verbose
+        let print_success = cli.verbose || atty::is(atty::Stream::Stdout);
+
         if is_dir_path {
             result.operation = "create_directory".to_string();
             if let Err(e) = create_directory(&path, cli.verbose && cli.output_format == OutputFormat::Text) {
@@ -92,6 +117,9 @@ fn run(cli: &Cli) -> Result<()> {
                 continue;
             }
             result.success = true;
+            if print_success && cli.output_format == OutputFormat::Text {
+                println!("Directory created: {}", path.display());
+            }
         } else {
             result.operation = "create_or_update_file".to_string();
             if let Err(e) = create_or_update_file(&path, cli) {
@@ -100,6 +128,16 @@ fn run(cli: &Cli) -> Result<()> {
                 continue;
             }
             result.success = true;
+            if print_success && cli.output_format == OutputFormat::Text {
+                println!("File created or updated: {}", path.display());
+            }
+        }
+
+        // If a glob pattern matched nothing and the original path contains a wildcard, warn
+        if path.to_string_lossy().contains('*') || path.to_string_lossy().contains('?') {
+            if cli.verbose || atty::is(atty::Stream::Stdout) {
+                eprintln!("Warning: Glob pattern '{}' matched nothing. Created as a literal path.", path.display());
+            }
         }
 
         if let Some(chmod) = &cli.chmod {
@@ -141,9 +179,5 @@ fn run(cli: &Cli) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::fs::File;
-    use tempfile::{tempdir, NamedTempFile};
-    
-    // Include tests here or move them to their respective modules
+    // Test helpers and test cases can be added here when needed.
 }
