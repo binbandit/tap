@@ -68,6 +68,12 @@ fn run(cli: &Cli) -> Result<()> {
             continue;
         }
 
+        // Intuitive: auto-detect directory creation if path ends with separator or exists as dir
+        let is_dir_path = cli.dir
+            || path.is_dir()
+            || path.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR)
+            || (path.extension().is_none() && !path.exists());
+
         // Always ensure parent directories exist, just like touch
         if let Some(parent) = path.parent() {
             if let Err(e) = fs::create_dir_all(parent) {
@@ -78,7 +84,7 @@ fn run(cli: &Cli) -> Result<()> {
             }
         }
 
-        if cli.dir {
+        if is_dir_path {
             result.operation = "create_directory".to_string();
             if let Err(e) = create_directory(&path, cli.verbose && cli.output_format == OutputFormat::Text) {
                 result.error = Some(e.to_string());
