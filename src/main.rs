@@ -68,29 +68,13 @@ fn run(cli: &Cli) -> Result<()> {
             continue;
         }
 
-        // Ensure parent directories exist if force option is true
-        if cli.force {
-            if let Some(parent) = path.parent() {
-                if let Err(e) = fs::create_dir_all(parent) {
-                    result.operation = "create_parent_directories".to_string();
-                    result.error = Some(format!("Failed to create parent directories: {}", e));
-                    results.push(result);
-                    continue;
-                }
-            }
-        } else {
-            // Only create parent directories if they already exist
-            if let Some(parent) = path.parent() {
-                if !parent.exists() {
-                    if cli.verbose && cli.output_format == OutputFormat::Text {
-                        println!("Parent directory does not exist: {}", parent.display());
-                        println!("Use --force to create parent directories automatically");
-                    }
-                    result.operation = "check_parent".to_string();
-                    result.message = Some(format!("Parent directory does not exist: {}", parent.display()));
-                    results.push(result);
-                    continue;
-                }
+        // Always ensure parent directories exist, just like touch
+        if let Some(parent) = path.parent() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                result.operation = "create_parent_directories".to_string();
+                result.error = Some(format!("Failed to create parent directories: {}", e));
+                results.push(result);
+                continue;
             }
         }
 
@@ -157,5 +141,3 @@ mod tests {
     
     // Include tests here or move them to their respective modules
 }
-
-
