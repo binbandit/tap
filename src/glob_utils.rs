@@ -1,58 +1,96 @@
-use std::path::PathBuf;
 use anyhow::Result;
 use glob::glob;
+use std::path::PathBuf;
 
-/// Expands glob patterns in the provided paths to a list of actual file paths.
-/// If a pattern doesn't match any files, it's treated as a path to be created.
-/// If a pattern is invalid, it's added as a literal path.
-///
-/// # Arguments
-///
-/// * `paths` - A slice of file path strings, which may include glob patterns
-///
-/// # Returns
-///
-/// A Result containing a Vec of expanded PathBuf objects
-///
-/// # Examples
-///
-/// ```
-/// use tap::glob_utils::expand_paths;
-///
-/// let paths = vec!["src/*.rs".to_string(), "README.md".to_string()];
-/// let expanded = expand_paths(&paths).unwrap();
-/// // expanded now contains paths to all Rust files in the src directory,
-/// // plus the README.md file
-/// ```
-pub fn expand_paths(paths: &[String]) -> Result<Vec<PathBuf>> {
+#[derive(Debug, Clone)]
+pub struct ExpandedPath {
+    pub path: PathBuf,
+    pub warnings: Vec<String>,
+}
+pub fn expand_paths(paths: &[String]) -> Result<Vec<ExpandedPath>> {
     let mut expanded = Vec::new();
 
-    for path in paths {
-        match glob(path) {
+    for raw in paths {
+        match glob(raw) {
             Ok(entries) => {
-                // Collect all entries in one pass
-                let mut found_entries = false;
-                
+                let mut matched = false;
+
                 for entry in entries {
-                    found_entries = true;
                     match entry {
-                        Ok(path) => expanded.push(path),
-                        Err(e) => println!("Error processing path {}: {:?}", path, e),
+                        Ok(path) => {
+                            matched = true;
+                            expanded.push(ExpandedPath {
+                                path,
+                                warnings: Vec::new(),
+                            });
+                        }
+                        Err(e) => {
+                            expanded.push(ExpandedPath {
+                                path: PathBuf::from(raw),
+                                warnings: vec![format!("Failed to expand '{}': {}", raw, e)],
+                            });
+                        }
                     }
                 }
-                
-                // If no matches were found, treat it as a new file/directory to be created
-                if !found_entries {
-                    expanded.push(PathBuf::from(path));
+
+                if !matched {
+                    expanded.push(ExpandedPath {
+                        path: PathBuf::from(raw),
+                        warnings: vec![format!(
+                            "Pattern '{}' matched no files — treating as literal path.",
+                            raw
+                        )],
+                    });
                 }
             }
             Err(e) => {
-                println!("Invalid glob pattern '{}': {:?}", path, e);
-                // Add the path as-is if it's not a valid glob pattern
-                expanded.push(PathBuf::from(path));
+                expanded.push(ExpandedPath {
+                    path: PathBuf::from(raw),
+                    warnings: vec![format!("Invalid glob pattern '{}': {}", raw, e)],
+                });
             }
         }
     }
 
     Ok(expanded)
-} 
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn expands_matching_glob_without_warnings() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("file.txt");
+        std::fs::write(&file, "ok").unwrap();
+
+        let pattern = format!("{}/**/*.txt", dir.path().display());
+        let results = expand_paths(&[pattern]).unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].warnings.is_empty());
+        assert_eq!(results[0].path, file);
+    }
+
+    #[test]
+    fn unmatched_pattern_returns_warning() {
+        let dir = tempdir().unwrap();
+        let pattern = format!("{}/**/*.md", dir.path().display());
+        let results = expand_paths(&[pattern.clone()]).unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, PathBuf::from(pattern));
+        assert_eq!(results[0].warnings.len(), 1);
+    }
+
+    #[test]
+    fn invalid_pattern_is_reported() {
+        let results = expand_paths(&["[".to_string()]).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].path, PathBuf::from("["));
+        assert_eq!(results[0].warnings.len(), 1);
+        assert!(results[0].warnings[0].contains("Invalid glob pattern"));
+    }
+}
