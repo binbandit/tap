@@ -1,11 +1,11 @@
-# tap 🖱️
+# tap
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Rust](https://img.shields.io/badge/rust-1.77%2B-blue.svg)](https://www.rust-lang.org)
 
 `tap` is a next-generation replacement for the Unix `touch` command, offering enhanced capabilities and intuitive options for file and directory manipulation.
 
-## 🌟 Features
+## Features
 
 - Create or update files and directories
 - Set file permissions (with recursive option for directories)
@@ -18,10 +18,11 @@
 - Convert line endings (CRLF ↔ LF)
 - Force creation of parent directories
 - Transform file encodings (with automatic detection)
-- Structured output formats (JSON, YAML)
+- Structured output formats (JSON, YAML) with per-path warnings and details
+- Automatically creates missing parent directories (with opt-out)
 - Cross-platform compatibility
 
-## 🚀 Installation
+## Installation
 
 To install `tap`, you need to have Rust and Cargo installed on your system. If you don't have them installed, you can get them from [rust-lang.org](https://www.rust-lang.org/tools/install).
 
@@ -41,7 +42,7 @@ cargo build --release
 
 The built binary will be located at `target/release/tap`.
 
-## 💡 Usage
+## Usage
 
 Here are some examples of how to use `tap`:
 
@@ -82,14 +83,17 @@ tap -t "2023-05-01 12:00:00" file.txt
 # Use glob patterns
 tap src/**/*.rs
 
-# Force creation of parent directories
-tap --force deeply/nested/new/file.txt
+# Parent directories are created automatically
+tap deeply/nested/new/file.txt
+
+# Opt out of automatic parent creation
+tap --no-parent nested/file.txt
 
 # Convert line endings
-tap --line_endings crlf2lf windows_file.txt
-tap --line_endings lf2crlf unix_file.txt
+tap --line-endings crlf2lf windows_file.txt
+tap --line-endings lf2crlf unix_file.txt
 
-# Get JSON output
+# Get JSON output (includes per-path warnings/details)
 tap --output-format json *.txt
 
 # Get YAML output
@@ -99,7 +103,7 @@ tap --output-format yaml config/
 tap --encoding utf8 mixed_encoding_files/*.txt
 ```
 
-## 🔧 Options
+## Options
 
 - `-d, --dir`: Create a directory instead of a file
 - `--chmod <MODE>`: Set specific permissions (octal format, e.g., 644)
@@ -111,13 +115,27 @@ tap --encoding utf8 mixed_encoding_files/*.txt
 - `--template <FILE>`: Use a template file for content
 - `--trim`: Remove trailing whitespace from each line
 - `--check`: Check if the file or directory exists (dry run)
-- `-f, --force`: Force creation of parent directories without confirmation
-- `--line_endings <CONVERSION>`: Convert line endings (values: crlf2lf, lf2crlf)
+- `--line-endings <CONVERSION>`: Convert line endings (values: crlf2lf, lf2crlf)
 - `--encoding <ENCODING>`: Convert file encoding (values: utf8, latin1, windows-1252)
-- `--timestamp_format <FORMAT>`: Custom timestamp format (e.g., "%Y/%m/%d %H:%M")
+- `--timestamp-format <FORMAT>`: Custom timestamp format (e.g., "%Y/%m/%d %H:%M")
 - `--output-format <FORMAT>`: Output format (values: text, json, yaml)
+- `--no-parent`: Do not create missing parent directories (fails like classic `touch`)
 
-## 🏗️ Architecture
+## Structured Output
+
+JSON and YAML modes emit one `OperationResult` per requested path. Each record now
+contains:
+
+- `message`: A human-friendly summary such as "File created" or "Directory ensured".
+- `warnings`: Any non-fatal issues (for example, unmatched glob patterns or flags that
+  are ignored for directories).
+- `details`: Extra context covering follow-up actions like line-ending normalization,
+  encoding conversions, or template writes.
+
+Warnings are echoed to stderr automatically when running interactively or with
+`--verbose`, keeping scripted text output clean while still surfacing issues to users.
+
+## Architecture
 
 The `tap` application is organized into modules for better maintainability:
 
@@ -129,15 +147,15 @@ The `tap` application is organized into modules for better maintainability:
 - `glob_utils`: Path expansion utilities
 - `main`: Main program logic and orchestration
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Inspired by the original Unix `touch` command
 - Built with [Rust](https://www.rust-lang.org/) and [clap](https://github.com/clap-rs/clap)

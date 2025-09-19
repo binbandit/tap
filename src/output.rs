@@ -1,28 +1,15 @@
+use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 
-/// Represents the output format options
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[value(rename_all = "lowercase")]
 pub enum OutputFormat {
     Text,
     Json,
     Yaml,
 }
 
-impl std::str::FromStr for OutputFormat {
-    type Err = String;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "text" => Ok(OutputFormat::Text),
-            "json" => Ok(OutputFormat::Json),
-            "yaml" => Ok(OutputFormat::Yaml),
-            _ => Err(format!("Unknown output format: {}", s)),
-        }
-    }
-}
-
-/// Data structure for JSON/YAML output
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct OperationResult {
     pub path: String,
     pub exists: bool,
@@ -38,19 +25,19 @@ pub struct OperationResult {
     pub message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub details: Vec<String>,
 }
 
-/// Format a vector of operation results in the specified format
 pub fn format_results(
-    results: &[OperationResult], 
-    format: OutputFormat
+    results: &[OperationResult],
+    format: OutputFormat,
 ) -> Result<String, anyhow::Error> {
     match format {
         OutputFormat::Json => Ok(serde_json::to_string_pretty(&results)?),
         OutputFormat::Yaml => Ok(serde_yaml::to_string(&results)?),
-        OutputFormat::Text => {
-            // In text mode, we don't do anything here as output is handled directly
-            Ok(String::new())
-        }
+        OutputFormat::Text => Ok(String::new()),
     }
-} 
+}
