@@ -55,6 +55,7 @@ tap file1.txt file2.txt file3.txt
 
 # Create a directory
 tap -d new_directory
+tap --mkdir logs/
 
 # Set file permissions
 tap --chmod 644 file.txt
@@ -76,6 +77,7 @@ tap --trim *.txt
 
 # Check if files exist (dry run)
 tap --check config/*.yml
+tap --exists config.yml
 
 # Set a specific timestamp
 tap -t "2023-05-01 12:00:00" file.txt
@@ -106,6 +108,7 @@ tap --encoding utf8 mixed_encoding_files/*.txt
 ## Options
 
 - `-d, --dir`: Create a directory instead of a file
+- `--mkdir`: Alias for `--dir`
 - `--chmod <MODE>`: Set specific permissions (octal format, e.g., 644)
 - `-w, --write <CONTENT>`: Add content to the file
 - `-t, --timestamp <TIME>`: Set access and modification times (YYYY-MM-DD HH:MM:SS)
@@ -115,11 +118,22 @@ tap --encoding utf8 mixed_encoding_files/*.txt
 - `--template <FILE>`: Use a template file for content
 - `--trim`: Remove trailing whitespace from each line
 - `--check`: Check if the file or directory exists (dry run)
+- `--exists`: Alias for `--check`
 - `--line-endings <CONVERSION>`: Convert line endings (values: crlf2lf, lf2crlf)
 - `--encoding <ENCODING>`: Convert file encoding (values: utf8, latin1, windows-1252)
 - `--timestamp-format <FORMAT>`: Custom timestamp format (e.g., "%Y/%m/%d %H:%M")
 - `--output-format <FORMAT>`: Output format (values: text, json, yaml)
 - `--no-parent`: Do not create missing parent directories (fails like classic `touch`)
+
+`tap` now exits with a non-zero status when any requested path fails, and text output
+includes a final success/failure summary to make bulk operations easier to scan.
+
+Sane defaults and guardrails:
+
+- `--append` requires `--write` or `--template`
+- `--recursive` requires `--chmod`
+- File-only flags (`--write`, `--template`, `--append`, `--trim`, `--encoding`,
+  `--line-endings`) emit warnings when used with directory targets
 
 ## Structured Output
 

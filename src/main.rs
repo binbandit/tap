@@ -7,7 +7,7 @@ mod timestamp;
 
 use std::fs;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::Parser;
 
 use cli::Cli;
@@ -23,6 +23,12 @@ fn main() -> Result<()> {
 }
 
 fn run(cli: &Cli) -> Result<()> {
+    if cli.append && cli.write.is_none() && cli.template.is_none() {
+        return Err(anyhow!(
+            "--append requires --write or --template so tap knows what to append"
+        ));
+    }
+
     let interactive = cli.output_format == OutputFormat::Text && atty::is(atty::Stream::Stdout);
     let expanded_paths = expand_paths(&cli.paths)?;
     let mut results = Vec::new();
@@ -71,6 +77,44 @@ fn run(cli: &Cli) -> Result<()> {
 
         let is_dir_path =
             cli.dir || path.is_dir() || path.to_string_lossy().ends_with(std::path::MAIN_SEPARATOR);
+
+        if is_dir_path {
+            let mut ignored_flags = Vec::new();
+            if cli.write.is_some() {
+                ignored_flags.push("--write");
+            }
+            if cli.template.is_some() {
+                ignored_flags.push("--template");
+            }
+            if cli.append {
+                ignored_flags.push("--append");
+            }
+            if cli.trim {
+                ignored_flags.push("--trim");
+            }
+            if cli.encoding.is_some() {
+                ignored_flags.push("--encoding");
+            }
+            if cli.line_endings.is_some() {
+                ignored_flags.push("--line-endings");
+            }
+
+            if !ignored_flags.is_empty() {
+                let warning = format!(
+                    "{} {} ignored for directories",
+                    ignored_flags.join(", "),
+                    if ignored_flags.len() == 1 {
+                        "is"
+                    } else {
+                        "are"
+                    }
+                );
+                result.warnings.push(warning.clone());
+                if cli.output_format == OutputFormat::Text && (cli.verbose || interactive) {
+                    eprintln!("Warning: {}.", warning);
+                }
+            }
+        }
 
         if let Some(parent) = path.parent() {
             let parent_is_root = parent.as_os_str().is_empty();
@@ -122,16 +166,7 @@ fn run(cli: &Cli) -> Result<()> {
             }
         }
 
-        if is_dir_path && (cli.encoding.is_some() || cli.line_endings.is_some()) {
-            result
-                .warnings
-                .push("--encoding and --line-endings are ignored for directories".to_string());
-            if cli.verbose || interactive {
-                eprintln!("Warning: --encoding and --line-endings have no effect on directories. Skipping.");
-            }
-        }
-
-        let print_success = cli.verbose;
+        let print_success = cli.output_format == OutputFormat::Text && (cli.verbose || interactive);
 
         if is_dir_path {
             result.operation = "create_directory".to_string();
@@ -145,7 +180,7 @@ fn run(cli: &Cli) -> Result<()> {
                 continue;
             }
             result.success = true;
-            if print_success && cli.output_format == OutputFormat::Text {
+            if print_success {
                 println!("Directory created: {}", path.display());
             }
         } else {
@@ -156,9 +191,6 @@ fn run(cli: &Cli) -> Result<()> {
                 continue;
             }
             result.success = true;
-            if print_success && cli.output_format == OutputFormat::Text {
-                println!("File created or updated: {}", path.display());
-            }
         }
 
         if let Some(chmod) = &cli.chmod {
@@ -194,7 +226,28 @@ fn run(cli: &Cli) -> Result<()> {
     }
 
     match cli.output_format {
-        OutputFormat::Text => {}
+        OutputFormat::Text => {
+            let failure_results: Vec<&OperationResult> =
+                results.iter().filter(|result| !result.success).collect();
+
+            if !failure_results.is_empty() {
+                for failed in &failure_results {
+                    if let Some(error) = &failed.error {
+                        eprintln!("Error: {} -> {}", failed.path, error);
+                    } else {
+                        eprintln!("Error: {} -> operation did not succeed", failed.path);
+                    }
+                }
+            }
+
+            if results.len() > 1 || !failure_results.is_empty() || cli.verbose || interactive {
+                println!(
+                    "tap: {} succeeded, {} failed",
+                    results.len() - failure_results.len(),
+                    failure_results.len()
+                );
+            }
+        }
         OutputFormat::Json => {
             let json = format_results(&results, OutputFormat::Json)?;
             println!("{}", json);
@@ -203,6 +256,11 @@ fn run(cli: &Cli) -> Result<()> {
             let yaml = format_results(&results, OutputFormat::Yaml)?;
             println!("{}", yaml);
         }
+    }
+
+    let failures = results.iter().filter(|result| !result.success).count();
+    if failures > 0 {
+        return Err(anyhow!("{} operation(s) failed", failures));
     }
 
     Ok(())
@@ -266,7 +324,7 @@ mod tests {
 
         let mut cli = base_cli(vec![nested_string]);
         cli.no_parent = true;
-        run(&cli).expect("run should complete even when path creation fails");
+        run(&cli).expect_err("run should fail when --no-parent prevents creation");
         assert!(!nested_path.exists());
     }
 }
