@@ -48,7 +48,7 @@ pub struct Cli {
     #[arg(required = true)]
     pub paths: Vec<String>,
 
-    #[arg(short, long)]
+    #[arg(short, long, alias = "mkdir")]
     pub dir: bool,
 
     #[arg(short, long)]
@@ -66,7 +66,7 @@ pub struct Cli {
     #[arg(short, long)]
     pub verbose: bool,
 
-    #[arg(short = 'R', long)]
+    #[arg(short = 'R', long, requires = "chmod")]
     pub recursive: bool,
 
     #[arg(long)]
@@ -75,7 +75,7 @@ pub struct Cli {
     #[arg(long)]
     pub trim: bool,
 
-    #[arg(long)]
+    #[arg(long, alias = "exists")]
     pub check: bool,
 
     #[arg(long = "no-parent")]
