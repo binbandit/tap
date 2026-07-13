@@ -1,23 +1,29 @@
 [package]
 name = "tap"
-version = "1.0.0"
+version = "2.0.0"
 edition = "2021"
+rust-version = "1.74"
 authors = ["Brayden Moon <crazywolf132@gmail.com>"]
-description = "A next-gen version of touch with extended capabilities"
+description = "Make paths exist - a modern, friendly replacement for touch"
+license = "MIT"
+repository = "https://github.com/crazywolf132/tap"
 
 [dependencies]
-anyhow = "1.0.102"
-atty = "0.2"
-chardet = "0.2.4"
-chrono = "0.4.43"
-clap = { version = "4.5.60", features = ["derive"] }
-encoding_rs = "0.8.33"
-filetime = "0.2.27"
-glob = "0.3.3"
-tempfile = "3.25.0"
+anyhow = "1.0"
+chrono = "0.4"
+clap = { version = "4.5", features = ["derive", "wrap_help"] }
+clap_complete = "4.5"
+filetime = "0.2"
+glob = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-serde_yaml = "0.9"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lib]
+name = "tap"
+path = "src/lib.rs"
 
 [[bin]]
 name = "tap"
@@ -28,8 +34,9 @@ maintainer = "Brayden Moon <crazywolf132@gmail.com>"
 copyright = "2024, Brayden Moon <crazywolf132@gmail.com>"
 license-file = ["LICENSE", "4"]
 extended-description = """
-A next-generation replacement for the Unix touch command, offering enhanced capabilities 
-and intuitive options for file and directory manipulation."""
+Make paths exist. A modern, friendly replacement for the Unix touch command:
+create files and directories (with parents), seed content safely, set
+permissions and timestamps, and get structured output for scripts."""
 depends = "$auto"
 section = "utility"
 priority = "optional"
@@ -44,7 +51,8 @@ name = "tap"
 license = "MIT"
 release = "1"
 epoch = "0"
-summary = "A next-gen version of touch with extended capabilities"
+summary = "Make paths exist - a modern, friendly replacement for touch"
 description = """
-A next-generation replacement for the Unix touch command, offering enhanced capabilities 
-and intuitive options for file and directory manipulation."""
+Make paths exist. A modern, friendly replacement for the Unix touch command:
+create files and directories (with parents), seed content safely, set
+permissions and timestamps, and get structured output for scripts."""
