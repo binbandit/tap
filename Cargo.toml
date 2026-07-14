@@ -21,6 +21,11 @@ serde_json = "1.0"
 [dev-dependencies]
 tempfile = "3"
 
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+
 [lib]
 name = "tap"
 path = "src/lib.rs"

@@ -24,9 +24,10 @@ pub fn run(cli: &Cli) -> Result<Report> {
     let plan = Plan::prepare(cli)?;
     let targets = expand::expand_all(&cli.paths);
 
+    let mut parents = ops::ParentCache::default();
     let results = targets
         .iter()
-        .map(|target| ops::process(cli, &plan, target))
+        .map(|target| ops::process(cli, &plan, target, &mut parents))
         .collect();
 
     Ok(Report::new(results))

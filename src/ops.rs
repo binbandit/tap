@@ -1,8 +1,9 @@
 //! The per-path engine: decide what a target needs, then do it.
 
-use std::fs::{self, OpenOptions};
+use std::collections::HashSet;
+use std::fs::{self, Metadata, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
@@ -19,6 +20,11 @@ pub struct Plan {
     pub mode: Option<u32>,
     pub times: Option<RequestedTimes>,
 }
+
+/// Directories known to exist, so bulk runs stat each parent once instead of
+/// once per file.
+#[derive(Default)]
+pub struct ParentCache(HashSet<PathBuf>);
 
 impl Plan {
     /// Validate and resolve the shared parts of the invocation. Errors here
@@ -51,15 +57,19 @@ impl Plan {
 }
 
 /// Process one target and report what happened. Never panics, never prints.
-pub fn process(cli: &Cli, plan: &Plan, target: &Target) -> PathReport {
+pub fn process(cli: &Cli, plan: &Plan, target: &Target, parents: &mut ParentCache) -> PathReport {
     let mut report = PathReport::new(target.path.display().to_string());
     report.warnings.extend(target.warnings.iter().cloned());
 
     let path = &target.path;
-    let exists = path.exists();
+    // One stat answers exists/is_dir/is_file/len for the whole run.
+    let meta = fs::metadata(path).ok();
+    let exists = meta.is_some();
+    let is_dir = meta.as_ref().is_some_and(Metadata::is_dir);
+    let is_file = meta.as_ref().is_some_and(Metadata::is_file);
 
     if cli.check {
-        report.kind = kind_of(path);
+        report.kind = kind_of(is_dir, is_file);
         report.action = if exists {
             Action::Exists
         } else {
@@ -79,10 +89,10 @@ pub fn process(cli: &Cli, plan: &Plan, target: &Target) -> PathReport {
 
     let trailing_separator =
         target.given.ends_with('/') || target.given.ends_with(std::path::MAIN_SEPARATOR);
-    let want_dir = cli.dir || trailing_separator || path.is_dir();
+    let want_dir = cli.dir || trailing_separator || is_dir;
     report.kind = Some(if want_dir { Kind::Dir } else { Kind::File });
 
-    if exists && want_dir && path.is_file() {
+    if exists && want_dir && is_file {
         report.fail(
             "a file already exists at this path",
             Some("remove the trailing '/' (or -d) to treat it as a file"),
@@ -115,13 +125,22 @@ pub fn process(cli: &Cli, plan: &Plan, target: &Target) -> PathReport {
         return report;
     }
 
-    match execute(cli, plan, target, &mut report, exists, want_dir) {
+    let file_len = if is_file {
+        meta.as_ref().map_or(0, Metadata::len)
+    } else {
+        0
+    };
+
+    match execute(
+        cli, plan, target, &mut report, exists, want_dir, file_len, parents,
+    ) {
         Ok(()) => report.ok = report.error.is_none(),
         Err(e) => report.fail(format!("{e:#}"), None),
     }
     report
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute(
     cli: &Cli,
     plan: &Plan,
@@ -129,30 +148,30 @@ fn execute(
     report: &mut PathReport,
     existed: bool,
     want_dir: bool,
+    file_len: u64,
+    parents: &mut ParentCache,
 ) -> Result<()> {
     let path = &target.path;
 
-    // Parent directories.
+    // Parent directories. The cache means N files in one directory check it once.
     let mut needs_parents = false;
     if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() && !parent.exists() {
-            if cli.no_parents {
+        if !parent.as_os_str().is_empty() && !parents.0.contains(parent) {
+            if parent.exists() {
+                parents.0.insert(parent.to_path_buf());
+            } else if cli.no_parents {
                 report.fail(
                     format!("parent directory '{}' does not exist", parent.display()),
                     Some("drop --no-parents and tap will create it for you"),
                 );
                 return Ok(());
+            } else {
+                needs_parents = true;
             }
-            needs_parents = true;
         }
     }
 
     // Content safety: refuse to clobber real content without --force.
-    let file_len = if existed && !want_dir {
-        fs::metadata(path).map(|m| m.len()).unwrap_or(0)
-    } else {
-        0
-    };
     if !want_dir && plan.content.is_some() && !cli.append && file_len > 0 && !cli.force {
         report.fail(
             "refusing to overwrite existing content",
@@ -167,8 +186,9 @@ fn execute(
     }
 
     if needs_parents {
-        fs::create_dir_all(path.parent().expect("checked above"))
-            .context("failed to create parent directories")?;
+        let parent = path.parent().expect("checked above");
+        fs::create_dir_all(parent).context("failed to create parent directories")?;
+        parents.0.insert(parent.to_path_buf());
         report.changes.push("parents created".into());
     }
 
@@ -176,7 +196,10 @@ fn execute(
         if !existed {
             fs::create_dir_all(path).context("failed to create directory")?;
         }
-    } else {
+        parents.0.insert(path.to_path_buf());
+    } else if !existed || plan.content.is_some() {
+        // An existing file with no content to write only needs its times
+        // refreshed below; opening it would be a wasted syscall.
         write_file(cli, plan, path, report, existed, file_len)?;
     }
 
@@ -339,10 +362,10 @@ fn shebang_for(path: impl AsRef<Path>) -> Option<&'static str> {
     }
 }
 
-fn kind_of(path: &Path) -> Option<Kind> {
-    if path.is_dir() {
+fn kind_of(is_dir: bool, is_file: bool) -> Option<Kind> {
+    if is_dir {
         Some(Kind::Dir)
-    } else if path.is_file() {
+    } else if is_file {
         Some(Kind::File)
     } else {
         None
